@@ -46,7 +46,9 @@ VALUES
     ("student@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Demo Student", "01700000000"),
     ("staff@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Demo Staff", "01700000001"),
     ("head@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Department Head", "01700000002"),
-    ("admin@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "System Admin", "01700000003");
+    ("admin@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "System Admin", "01700000003"),
+    ("staff2@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Alex Support", "01700000004"),
+    ("staff3@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Jamie Technician", "01700000005");
 
 INSERT INTO user_roles
 SELECT u.user_id, r.role_id
@@ -55,6 +57,7 @@ JOIN roles r ON (
     (u.email = "student@example.com" AND r.role_name = "Student") OR
     (u.email = "staff@example.com" AND r.role_name = "Staff") OR
     (u.email = "head@example.com" AND r.role_name = "Department Head") OR
+    (u.email IN ("staff2@example.com", "staff3@example.com") AND r.role_name = "Staff") OR
     (u.email = "admin@example.com" AND r.role_name = "Admin")
 );
 
@@ -69,6 +72,18 @@ SELECT u.user_id, "STF-001", d.department_id, "Network Administrator"
 FROM users u
 JOIN departments d ON d.department_name = "IT"
 WHERE u.email = "staff@example.com";
+
+INSERT INTO staff (user_id, staff_number, department_id, designation)
+SELECT u.user_id, "STF-002", d.department_id, "IT Support Officer"
+FROM users u
+JOIN departments d ON d.department_name = "IT"
+WHERE u.email = "staff2@example.com";
+
+INSERT INTO staff (user_id, staff_number, department_id, designation)
+SELECT u.user_id, "STF-003", d.department_id, "Technical Support Officer"
+FROM users u
+JOIN departments d ON d.department_name = "IT"
+WHERE u.email = "staff3@example.com";
 
 INSERT INTO staff (user_id, staff_number, department_id, designation)
 SELECT u.user_id, "DH-001", d.department_id, "Department Head"

@@ -17,17 +17,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (!$complaint) {
             throw new Exception("Complaint not found.");
         }
-        if (!in_array($complaint["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED"], true)) {
+        if (!in_array($complaint["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS"], true)) {
             throw new Exception("This complaint can no longer be assigned.");
         }
 
         $q = $pdo->prepare(
-            "SELECT s.staff_id,u.user_id,u.full_name FROM staff s JOIN users u ON u.user_id=s.user_id WHERE s.staff_id=? AND s.department_id=? AND s.status='ACTIVE' AND u.is_active=1",
+            "SELECT s.staff_id,u.user_id,u.full_name,d.department_name FROM staff s JOIN users u ON u.user_id=s.user_id LEFT JOIN departments d ON d.department_id=s.department_id WHERE s.staff_id=? AND s.status='ACTIVE' AND u.is_active=1",
         );
-        $q->execute([$staffId, $complaint["department_id"]]);
+        $q->execute([$staffId]);
         $assignee = $q->fetch();
         if (!$assignee) {
-            throw new Exception("Choose an active staff member from this department.");
+            throw new Exception("Choose an active staff member.");
         }
 
         $pdo->prepare(
@@ -42,7 +42,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             trim($_POST["remarks"] ?? ""),
         ]);
 
-        if ($complaint["status"] !== "ASSIGNED") {
+        if (in_array($complaint["status"], ["SUBMITTED", "UNDER_REVIEW"], true)) {
             if (!transition_ok($complaint["status"], "ASSIGNED")) {
                 throw new Exception("Complaint cannot be assigned from its current status.");
             }
@@ -110,10 +110,10 @@ $deps = $pdo->query("SELECT * FROM departments ORDER BY department_name")->fetch
 $cats = $pdo->query("SELECT * FROM complaint_categories ORDER BY category_name")->fetchAll();
 $staffByDepartment = [];
 $staffRows = $pdo->query(
-    "SELECT s.staff_id,s.department_id,s.designation,u.full_name FROM staff s JOIN users u ON u.user_id=s.user_id WHERE s.status='ACTIVE' AND u.is_active=1 ORDER BY u.full_name",
+    "SELECT s.staff_id,s.department_id,s.designation,u.full_name,d.department_name FROM staff s JOIN users u ON u.user_id=s.user_id LEFT JOIN departments d ON d.department_id=s.department_id WHERE s.status='ACTIVE' AND u.is_active=1 ORDER BY u.full_name",
 )->fetchAll();
 foreach ($staffRows as $staff) {
-    $staffByDepartment[$staff["department_id"]][] = $staff;
+    $staffByDepartment[] = $staff;
 }
 
 require "../includes/header.php";
@@ -123,7 +123,7 @@ require "../includes/header.php";
         <div>
             <p class="eyebrow">SERVICE DESK / ADMIN</p>
             <h1>Complaint Queue</h1>
-            <p class="muted">Review new requests and route each case to the right team.</p>
+            <p class="muted">Review new requests and assign them to any active staff member.</p>
         </div>
     </div>
 
@@ -178,20 +178,21 @@ require "../includes/header.php";
                             <td><?= e($row["priority"]) ?></td>
                             <td><?= badge($row["status"]) ?></td>
                             <td>
-                                <?php if (in_array($row["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED"], true)): ?>
+                                <?php if (in_array($row["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS"], true)): ?>
                                     <form class="assignment-form" method="post">
                                         <input type="hidden" name="csrf" value="<?= csrf() ?>">
                                         <input type="hidden" name="complaint_id" value="<?= $row["complaint_id"] ?>">
                                         <label class="sr-only" for="staff-<?= $row["complaint_id"] ?>">Assign <?= e($row["ticket_number"]) ?> to staff</label>
                                         <select id="staff-<?= $row["complaint_id"] ?>" name="staff_id" required>
                                             <option value="">Choose staff</option>
-                                            <?php foreach ($staffByDepartment[$row["department_id"]] ?? [] as $staff): ?>
-                                                <option value="<?= $staff["staff_id"] ?>" <?= (string) ($row["assigned_staff_id"] ?? "") === (string) $staff["staff_id"] ? "selected" : "" ?>><?= e($staff["full_name"] . ($staff["designation"] ? " · " . $staff["designation"] : "")) ?></option>
+                                            <?php foreach ($staffByDepartment as $staff): ?>
+                                                <option value="<?= $staff["staff_id"] ?>" <?= (string) ($row["assigned_staff_id"] ?? "") === (string) $staff["staff_id"] ? "selected" : "" ?>><?= e($staff["full_name"] . ($staff["designation"] ? " · " . $staff["designation"] : "") . ($staff["department_name"] ? " · " . $staff["department_name"] : "")) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                         <input class="assignment-remarks" name="remarks" maxlength="500" placeholder="Assignment note (optional)" aria-label="Assignment note for <?= e($row["ticket_number"]) ?>">
-                                        <button class="btn assign-button"><?= $row["assigned_staff"] ? "Reassign" : "Assign" ?></button>
+                                        <button class="btn assign-button" <?= !$staffByDepartment ? "disabled" : "" ?>><?= $row["assigned_staff"] ? "Reassign" : "Assign" ?></button>
                                     </form>
+                                    <?php if (!$staffByDepartment): ?><span class="muted">No active staff accounts. Create one from Users first.</span><?php endif; ?>
                                 <?php else: ?>
                                     <span class="assigned-name"><?= e($row["assigned_staff"] ?? "Not assigned") ?></span>
                                 <?php endif; ?>
