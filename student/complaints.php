@@ -11,7 +11,7 @@ if (!empty($_GET["status"])) {
     $args[] = $_GET["status"];
 }
 $q = $pdo->prepare(
-    "SELECT c.*,d.department_name FROM complaints c JOIN students st ON st.student_id=c.student_id JOIN departments d ON d.department_id=c.department_id WHERE $where ORDER BY c.submitted_at DESC",
+    "SELECT c.*,d.department_name FROM complaints c JOIN students st ON st.student_id=c.student_id LEFT JOIN departments d ON d.department_id=c.department_id WHERE $where ORDER BY c.submitted_at DESC",
 );
 $q->execute($args);
 $rows = $q->fetchAll();
@@ -26,6 +26,7 @@ require "../includes/header.php";
         "IN_PROGRESS",
         "RESOLVED",
         "CLOSED",
+        "IGNORED",
     ]
     as $x
 ): ?><option <?= $x === ($_GET["status"] ?? "")

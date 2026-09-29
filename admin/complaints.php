@@ -5,6 +5,18 @@ require_role("Admin");
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     check_csrf();
     $complaintId = (int) ($_POST["complaint_id"] ?? 0);
+    $action = $_POST["action"] ?? "assign";
+
+    if (in_array($action, ["ignore", "resolve"], true)) {
+        try {
+            flash("success", review_complaint($pdo, $complaintId, $_SESSION["user_id"], $action, null, $_POST["note"] ?? ""));
+        } catch (Throwable $e) {
+            flash("error", $e->getMessage());
+        }
+        header("Location: complaints.php");
+        exit();
+    }
+
     $staffId = (int) ($_POST["staff_id"] ?? 0);
 
     try {
@@ -102,7 +114,7 @@ foreach (["status", "priority", "department_id", "category_id"] as $filter) {
 }
 
 $q = $pdo->prepare(
-    "SELECT c.*,d.department_name,cc.category_name,st.student_number,su.full_name student_name,(SELECT u2.full_name FROM complaint_assignments ca JOIN staff s2 ON s2.staff_id=ca.staff_id JOIN users u2 ON u2.user_id=s2.user_id WHERE ca.complaint_id=c.complaint_id AND ca.unassigned_at IS NULL ORDER BY ca.assignment_id DESC LIMIT 1) assigned_staff,(SELECT ca.staff_id FROM complaint_assignments ca WHERE ca.complaint_id=c.complaint_id AND ca.unassigned_at IS NULL ORDER BY ca.assignment_id DESC LIMIT 1) assigned_staff_id FROM complaints c JOIN departments d ON d.department_id=c.department_id JOIN complaint_categories cc ON cc.category_id=c.category_id JOIN students st ON st.student_id=c.student_id JOIN users su ON su.user_id=st.user_id WHERE $where ORDER BY c.submitted_at DESC",
+    "SELECT c.*,d.department_name,cc.category_name,st.student_number,su.full_name student_name,(SELECT u2.full_name FROM complaint_assignments ca JOIN staff s2 ON s2.staff_id=ca.staff_id JOIN users u2 ON u2.user_id=s2.user_id WHERE ca.complaint_id=c.complaint_id AND ca.unassigned_at IS NULL ORDER BY ca.assignment_id DESC LIMIT 1) assigned_staff,(SELECT ca.staff_id FROM complaint_assignments ca WHERE ca.complaint_id=c.complaint_id AND ca.unassigned_at IS NULL ORDER BY ca.assignment_id DESC LIMIT 1) assigned_staff_id FROM complaints c LEFT JOIN departments d ON d.department_id=c.department_id JOIN complaint_categories cc ON cc.category_id=c.category_id JOIN students st ON st.student_id=c.student_id JOIN users su ON su.user_id=st.user_id WHERE $where ORDER BY c.submitted_at DESC",
 );
 $q->execute($args);
 $rows = $q->fetchAll();
@@ -134,7 +146,7 @@ require "../includes/header.php";
             <div class="filter-grid">
                 <select name="status">
                     <option value="">All statuses</option>
-                    <?php foreach (["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED"] as $status): ?>
+                    <?php foreach (["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED", "IGNORED"] as $status): ?>
                         <option value="<?= e($status) ?>" <?= $status === ($_GET["status"] ?? "") ? "selected" : "" ?>><?= e(str_replace("_", " ", $status)) ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -166,7 +178,7 @@ require "../includes/header.php";
         <div class="table-scroll">
             <table>
                 <thead>
-                    <tr><th>Ticket</th><th>Student</th><th>Complaint</th><th>Department</th><th>Priority</th><th>Status</th><th>Assignment</th></tr>
+                    <tr><th>Ticket</th><th>Student</th><th>Complaint</th><th>Department</th><th>Priority</th><th>Status</th><th>Review and assignment</th></tr>
                 </thead>
                 <tbody>
                     <?php foreach ($rows as $row): ?>
@@ -181,6 +193,7 @@ require "../includes/header.php";
                                 <?php if (in_array($row["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS"], true)): ?>
                                     <form class="assignment-form" method="post">
                                         <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                                        <input type="hidden" name="action" value="assign">
                                         <input type="hidden" name="complaint_id" value="<?= $row["complaint_id"] ?>">
                                         <label class="sr-only" for="staff-<?= $row["complaint_id"] ?>">Assign <?= e($row["ticket_number"]) ?> to staff</label>
                                         <select id="staff-<?= $row["complaint_id"] ?>" name="staff_id" required>
@@ -192,6 +205,22 @@ require "../includes/header.php";
                                         <input class="assignment-remarks" name="remarks" maxlength="500" placeholder="Assignment note (optional)" aria-label="Assignment note for <?= e($row["ticket_number"]) ?>">
                                         <button class="btn assign-button" <?= !$staffByDepartment ? "disabled" : "" ?>><?= $row["assigned_staff"] ? "Reassign" : "Assign" ?></button>
                                     </form>
+                                    <div class="complaint-review-actions">
+                                        <form class="review-decision-form" method="post" onsubmit="return confirm('Mark this complaint as ignored?')">
+                                            <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                                            <input type="hidden" name="action" value="ignore">
+                                            <input type="hidden" name="complaint_id" value="<?= $row["complaint_id"] ?>">
+                                            <input name="note" maxlength="500" placeholder="Ignore note (optional)" aria-label="Reason for ignoring <?= e($row["ticket_number"]) ?>">
+                                            <button class="btn danger">Ignore</button>
+                                        </form>
+                                        <form class="review-decision-form" method="post">
+                                            <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                                            <input type="hidden" name="action" value="resolve">
+                                            <input type="hidden" name="complaint_id" value="<?= $row["complaint_id"] ?>">
+                                            <input name="note" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note for <?= e($row["ticket_number"]) ?>">
+                                            <button class="btn secondary">Mark resolved</button>
+                                        </form>
+                                    </div>
                                     <?php if (!$staffByDepartment): ?><span class="muted">No active staff accounts. Create one from Users first.</span><?php endif; ?>
                                 <?php else: ?>
                                     <span class="assigned-name"><?= e($row["assigned_staff"] ?? "Not assigned") ?></span>

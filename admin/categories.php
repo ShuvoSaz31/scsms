@@ -23,19 +23,64 @@ $subs = $pdo
     )
     ->fetchAll();
 require "../includes/header.php";
-?><div class="container"><div class="two"><div class="card"><h1>Add Category</h1><form method="post"><input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="kind" value="cat"><label>Name</label><input name="name" required><label>Description</label><input name="description"><button class="btn">Add</button></form></div><div class="card"><h1>Add Subcategory</h1><form method="post"><input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="kind" value="sub"><label>Category</label><select name="category_id"><?php foreach (
-    $cats
-    as $c
-): ?><option value="<?= $c["category_id"] ?>"><?= e(
-    $c["category_name"],
-) ?></option><?php endforeach; ?></select><label>Name</label><input name="name" required><button class="btn">Add</button></form></div></div><div class="card"><h2>Categories</h2><?php foreach (
-    $cats
-    as $c
-): ?><p><b><?= e($c["category_name"]) ?></b> — <?= e(
-    $c["description"],
-) ?></p><?php endforeach; ?><h2>Subcategories</h2><?php foreach (
-    $subs
-    as $s
-): ?><p><?= e($s["category_name"]) ?> → <?= e(
-     $s["subcategory_name"],
- ) ?></p><?php endforeach; ?></div></div><?php require "../includes/footer.php"; ?>
+?>
+<div class="container admin-taxonomy">
+    <div class="page-heading">
+        <div>
+            <p class="dashboard-kicker">Service desk / configuration</p>
+            <h1>Categories</h1>
+            <p class="dashboard-description">Organize complaint requests into clear service areas.</p>
+        </div>
+    </div>
+    <div class="two admin-taxonomy-forms">
+        <section class="card admin-taxonomy-card">
+            <p class="taxonomy-eyebrow">Top-level classification</p>
+            <h2>Add category</h2>
+            <form method="post">
+                <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                <input type="hidden" name="kind" value="cat">
+                <label for="category-name">Category name</label>
+                <input id="category-name" name="name" required maxlength="100">
+                <label for="category-description">Description</label>
+                <input id="category-description" name="description" maxlength="255">
+                <button class="btn">Add category</button>
+            </form>
+        </section>
+        <section class="card admin-taxonomy-card">
+            <p class="taxonomy-eyebrow">Nested classification</p>
+            <h2>Add subcategory</h2>
+            <form method="post">
+                <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                <input type="hidden" name="kind" value="sub">
+                <label for="subcategory-category">Parent category</label>
+                <select id="subcategory-category" name="category_id" required>
+                    <option value="">Choose a category</option>
+                    <?php foreach ($cats as $category): ?>
+                        <option value="<?= (int) $category["category_id"] ?>"><?= e($category["category_name"]) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <label for="subcategory-name">Subcategory name</label>
+                <input id="subcategory-name" name="name" required maxlength="100">
+                <button class="btn">Add subcategory</button>
+            </form>
+        </section>
+    </div>
+    <section class="card taxonomy-list-card">
+        <div class="taxonomy-list-grid">
+            <div>
+                <h2>Categories</h2>
+                <?php foreach ($cats as $category): ?>
+                    <div class="taxonomy-list-row"><strong><?= e($category["category_name"]) ?></strong><span><?= e($category["description"] ?: "No description") ?></span></div>
+                <?php endforeach; ?>
+            </div>
+            <div>
+                <h2>Subcategories</h2>
+                <?php foreach ($subs as $subcategory): ?>
+                    <div class="taxonomy-list-row"><strong><?= e($subcategory["subcategory_name"]) ?></strong><span><?= e($subcategory["category_name"]) ?></span></div>
+                <?php endforeach; ?>
+                <?php if (!$subs): ?><p class="muted">No subcategories added yet.</p><?php endif; ?>
+            </div>
+        </div>
+    </section>
+</div>
+<?php require "../includes/footer.php"; ?>

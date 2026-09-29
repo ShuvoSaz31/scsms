@@ -4,7 +4,7 @@ require_login();
 $id = (int) ($_GET["id"] ?? 0);
 
 $q = $pdo->prepare(
-    "SELECT c.*,d.department_name,cc.category_name,st.student_number,st.user_id student_user FROM complaints c JOIN departments d ON d.department_id=c.department_id JOIN complaint_categories cc ON cc.category_id=c.category_id JOIN students st ON st.student_id=c.student_id WHERE c.complaint_id=?",
+    "SELECT c.*,d.department_name,cc.category_name,st.student_number,st.user_id student_user FROM complaints c LEFT JOIN departments d ON d.department_id=c.department_id JOIN complaint_categories cc ON cc.category_id=c.category_id JOIN students st ON st.student_id=c.student_id WHERE c.complaint_id=?",
 );
 $q->execute([$id]);
 $c = $q->fetch();
@@ -18,6 +18,16 @@ $as = current_assignment($pdo, $id);
 
 if ($_SESSION["role"] === "Student" && !$isOwner) {
     exit("Access denied.");
+}
+
+if ($_SESSION["role"] === "Department Head") {
+    $departmentQuery = $pdo->prepare(
+        "SELECT department_id FROM staff WHERE user_id=? AND status='ACTIVE'",
+    );
+    $departmentQuery->execute([$_SESSION["user_id"]]);
+    if ((int) $departmentQuery->fetchColumn() !== (int) $c["department_id"]) {
+        exit("Access denied.");
+    }
 }
 
 if (
@@ -46,7 +56,7 @@ $feedback = $f->fetch();
 
 require "../includes/header.php";
 ?>
-<div class="container">
+<div class="container complaint-detail-page">
     <div class="two">
         <div class="card">
             <h1><?= e($c["ticket_number"]) ?></h1>
@@ -100,18 +110,21 @@ require "../includes/header.php";
                 <?php endforeach; ?>
             </div>
 
-            <?php if ($isOwner && $c["status"] === "RESOLVED" && !$feedback): ?>
+            <?php if ($isOwner && in_array($c["status"], ["RESOLVED", "CLOSED"], true) && !$feedback): ?>
                 <hr>
                 <h3>Feedback</h3>
                 <form method="post" action="/scsms_V1/student/feedback.php">
                     <input type="hidden" name="csrf" value="<?= csrf() ?>">
                     <input type="hidden" name="complaint_id" value="<?= $id ?>">
-                    <label>Rating (1-5)</label>
-                    <select name="rating" required>
-                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                            <option><?= $i ?></option>
-                        <?php endfor; ?>
-                    </select>
+                    <fieldset class="star-rating">
+                        <legend>Rate this resolution</legend>
+                        <div class="star-rating-options">
+                            <?php for ($i = 5; $i >= 1; $i--): ?>
+                                <input id="feedback-rating-<?= $i ?>" type="radio" name="rating" value="<?= $i ?>" required>
+                                <label for="feedback-rating-<?= $i ?>" title="<?= $i ?> out of 5 stars" aria-label="<?= $i ?> out of 5 stars">★</label>
+                            <?php endfor; ?>
+                        </div>
+                    </fieldset>
                     <label>Comment</label>
                     <textarea name="comment"></textarea>
                     <button class="btn">Submit Feedback</button>

@@ -8,17 +8,40 @@ $deps = $pdo
 $err = "";
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     check_csrf();
+    if (($_POST["action"] ?? "") === "toggle_active") {
+        $userId = (int) ($_POST["user_id"] ?? 0);
+        $pdo->prepare(
+            "UPDATE users SET is_active=1-is_active WHERE user_id=?",
+        )->execute([$userId]);
+        flash("success", "User active status updated.");
+        header("Location: users.php");
+        exit();
+    }
     try {
+        $email = strtolower(trim($_POST["email"] ?? ""));
+        $phone = trim($_POST["phone"] ?? "");
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Enter a valid email address.");
+        }
+        if (!preg_match('/^[0-9+().\-\s]{5,30}$/D', $phone) || preg_match_all('/[0-9]/', $phone) < 5) {
+            throw new Exception("Enter a valid phone number with at least 5 digits.");
+        }
         $pdo->beginTransaction();
         $pdo->prepare(
             "INSERT INTO users(email,password_hash,full_name,phone) VALUES(?,?,?,?)",
         )->execute([
-            trim($_POST["email"]),
+            $email,
             password_hash($_POST["password"], PASSWORD_DEFAULT),
             trim($_POST["full_name"]),
-            trim($_POST["phone"]),
+            $phone,
         ]);
         $uid = $pdo->lastInsertId();
+        $pdo->prepare(
+            "INSERT INTO user_emails(user_id,email,is_primary) VALUES(?,?,1)",
+        )->execute([$uid, $email]);
+        $pdo->prepare(
+            "INSERT INTO user_phones(user_id,phone,is_primary) VALUES(?,?,1)",
+        )->execute([$uid, $phone]);
         $rid = (int) $_POST["role_id"];
         $pdo->prepare("INSERT INTO user_roles VALUES(?,?)")->execute([
             $uid,
@@ -78,11 +101,11 @@ require "../includes/header.php";
     as $d
 ): ?><option value="<?= $d["department_id"] ?>"><?= e(
     $d["department_name"],
-) ?></option><?php endforeach; ?></select><label>Program (student)</label><input name="program"><label>Trimester (student)</label><input name="trimester"><label>Designation (staff/head)</label><input name="designation"><button class="btn">Create</button></form></div><div class="card"><h2>Users</h2><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr><?php foreach (
+) ?></option><?php endforeach; ?></select><label>Program (student)</label><input name="program"><label>Trimester (student)</label><input name="trimester"><label>Designation (staff/head)</label><input name="designation"><button class="btn">Create</button></form></div><div class="card"><h2>Users</h2><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>Actions</th></tr><?php foreach (
     $list
     as $u
 ): ?><tr><td><?= e($u["full_name"]) ?></td><td><?= e(
     $u["email"],
 ) ?></td><td><?= e($u["roles"]) ?></td><td><?= e(
-    $u["is_active"] ? "Yes" : "No",
-) ?></td></tr><?php endforeach; ?></table></div></div><?php require "../includes/footer.php"; ?>
+    $u["is_active"] ? "Active" : "Deactivated",
+) ?></td><td><form method="post"><input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="action" value="toggle_active"><input type="hidden" name="user_id" value="<?= (int) $u["user_id"] ?>"><button class="btn secondary"><?= $u["is_active"] ? "Deactivate" : "Activate" ?></button></form></td></tr><?php endforeach; ?></table></div></div><?php require "../includes/footer.php"; ?>
