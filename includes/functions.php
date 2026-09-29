@@ -97,6 +97,64 @@ function notify($pdo, $uid, $cid, $title, $msg)
     );
     $q->execute([$uid, $cid, $title, $msg]);
 }
+function review_complaint($pdo, $complaintId, $userId, $action, $departmentId = null, $note = "")
+{
+    if (!in_array($action, ["ignore", "resolve"], true)) {
+        throw new Exception("Unsupported complaint review action.");
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $sql = "SELECT c.complaint_id,c.ticket_number,c.status,st.user_id student_user FROM complaints c JOIN students st ON st.student_id=c.student_id WHERE c.complaint_id=?";
+        $params = [(int) $complaintId];
+        if ($departmentId !== null) {
+            $sql .= " AND c.department_id=?";
+            $params[] = (int) $departmentId;
+        }
+        $q = $pdo->prepare($sql . " FOR UPDATE");
+        $q->execute($params);
+        $complaint = $q->fetch();
+        if (!$complaint) {
+            throw new Exception("Complaint not found in your review scope.");
+        }
+        if (!in_array($complaint["status"], ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS"], true)) {
+            throw new Exception("Only actionable complaints can be ignored or marked resolved.");
+        }
+
+        $note = trim(substr((string) $note, 0, 500));
+        $newStatus = $action === "ignore" ? "IGNORED" : "RESOLVED";
+        $historyNote = $note !== "" ? $note : ($action === "ignore" ? "Ignored during complaint review." : "Marked resolved during complaint review.");
+
+        $pdo->prepare(
+            "UPDATE complaint_assignments SET unassigned_at=NOW() WHERE complaint_id=? AND unassigned_at IS NULL",
+        )->execute([$complaintId]);
+
+        if ($action === "ignore") {
+            $pdo->prepare(
+                "UPDATE complaints SET status='IGNORED' WHERE complaint_id=?",
+            )->execute([$complaintId]);
+            $notificationTitle = "Complaint ignored";
+            $notificationMessage = "Your complaint " . $complaint["ticket_number"] . " was reviewed and marked ignored.";
+        } else {
+            $pdo->prepare(
+                "UPDATE complaints SET status='RESOLVED',resolved_by=?,resolved_at=COALESCE(resolved_at,NOW()),resolution_description=CASE WHEN ?<>'' THEN ? ELSE resolution_description END WHERE complaint_id=?",
+            )->execute([$userId, $note, $note, $complaintId]);
+            $notificationTitle = "Complaint marked resolved";
+            $notificationMessage = "Your complaint " . $complaint["ticket_number"] . " was marked resolved during review.";
+        }
+
+        add_history($pdo, $complaintId, $complaint["status"], $newStatus, $userId, $historyNote);
+        notify($pdo, $complaint["student_user"], $complaintId, $notificationTitle, $notificationMessage);
+        $pdo->commit();
+
+        return $action === "ignore" ? "Complaint marked ignored." : "Complaint marked resolved.";
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
 function current_assignment($pdo, $cid)
 {
     $q = $pdo->prepare(

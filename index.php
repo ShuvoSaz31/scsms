@@ -5,9 +5,10 @@ if (!empty($_SESSION["user_id"])) {
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     check_csrf();
     $q = $pdo->prepare(
-        "SELECT u.*,r.role_name FROM users u JOIN user_roles ur ON ur.user_id=u.user_id JOIN roles r ON r.role_id=ur.role_id WHERE u.email=? AND u.is_active=1 LIMIT 1",
+        "SELECT u.*,r.role_name FROM users u JOIN user_roles ur ON ur.user_id=u.user_id JOIN roles r ON r.role_id=ur.role_id WHERE u.email=? OR EXISTS (SELECT 1 FROM user_emails ue WHERE ue.user_id=u.user_id AND ue.email=?) LIMIT 1",
     );
-    $q->execute([trim($_POST["email"] ?? "")]);
+    $email = strtolower(trim($_POST["email"] ?? ""));
+    $q->execute([$email, $email]);
     $u = $q->fetch();
     if ($u && password_verify($_POST["password"] ?? "", $u["password_hash"])) {
         session_regenerate_id(true);

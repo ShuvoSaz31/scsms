@@ -1,0 +1,5 @@
+USE student_service_management;
+
+ALTER TABLE complaints
+    MODIFY status ENUM('SUBMITTED', 'UNDER_REVIEW', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'IGNORED')
+    NOT NULL DEFAULT 'SUBMITTED';

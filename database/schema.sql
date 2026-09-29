@@ -15,6 +15,8 @@ DROP TABLE IF EXISTS feedback,
     complaint_categories,
     students,
     staff,
+    user_phones,
+    user_emails,
     user_roles,
     roles,
     departments,
@@ -27,9 +29,31 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(150) NOT NULL,
     phone VARCHAR(30),
+    profile_photo VARCHAR(255),
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_emails (
+    email_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    is_primary TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+    INDEX (user_id)
+);
+
+CREATE TABLE user_phones (
+    phone_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    phone VARCHAR(30) NOT NULL,
+    is_primary TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+    UNIQUE (user_id, phone),
+    INDEX (user_id)
 );
 
 CREATE TABLE roles (
@@ -100,11 +124,11 @@ CREATE TABLE complaints (
     student_id INT NOT NULL,
     category_id INT NOT NULL,
     subcategory_id INT NULL,
-    department_id INT NOT NULL,
+    department_id INT NULL,
     title VARCHAR(200) NOT NULL,
     description TEXT NOT NULL,
     priority ENUM('Low', 'Medium', 'High', 'Critical') NOT NULL DEFAULT 'Medium',
-    status ENUM('SUBMITTED', 'UNDER_REVIEW', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED') NOT NULL DEFAULT 'SUBMITTED',
+    status ENUM('SUBMITTED', 'UNDER_REVIEW', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'IGNORED') NOT NULL DEFAULT 'SUBMITTED',
     location VARCHAR(200),
     resolution_description TEXT NULL,
     resolved_by INT NULL,
@@ -115,7 +139,7 @@ CREATE TABLE complaints (
     FOREIGN KEY (student_id) REFERENCES students (student_id),
     FOREIGN KEY (category_id) REFERENCES complaint_categories (category_id),
     FOREIGN KEY (subcategory_id) REFERENCES complaint_subcategories (subcategory_id) ON DELETE SET NULL,
-    FOREIGN KEY (department_id) REFERENCES departments (department_id),
+    FOREIGN KEY (department_id) REFERENCES departments (department_id) ON DELETE SET NULL,
     FOREIGN KEY (resolved_by) REFERENCES users (user_id) ON DELETE SET NULL,
     INDEX (student_id),
     INDEX (department_id),

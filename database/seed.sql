@@ -50,6 +50,12 @@ VALUES
     ("staff2@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Alex Support", "01700000004"),
     ("staff3@example.com", "$2y$12$k/9CclitssQeGBya0DCQfOHBksyw8afxRs.b0qqZppBYdVddT3RFC", "Jamie Technician", "01700000005");
 
+INSERT INTO user_emails (user_id, email, is_primary)
+SELECT user_id, email, 1 FROM users;
+
+INSERT INTO user_phones (user_id, phone, is_primary)
+SELECT user_id, phone, 1 FROM users WHERE phone IS NOT NULL AND TRIM(phone) <> '';
+
 INSERT INTO user_roles
 SELECT u.user_id, r.role_id
 FROM users u
