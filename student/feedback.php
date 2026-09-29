@@ -9,8 +9,12 @@ $q = $pdo->prepare(
 );
 $q->execute([$id, $_SESSION["user_id"]]);
 $c = $q->fetch();
-if (!$c || $c["status"] !== "RESOLVED") {
+if (!$c || !in_array($c["status"], ["RESOLVED", "CLOSED"], true)) {
     exit("Feedback is not available.");
+}
+$rating = filter_var($_POST["rating"] ?? null, FILTER_VALIDATE_INT);
+if ($rating === false || $rating < 1 || $rating > 5) {
+    exit("Rating must be between 1 and 5.");
 }
 $q = $pdo->prepare("SELECT feedback_id FROM feedback WHERE complaint_id=?");
 $q->execute([$id]);
@@ -19,7 +23,7 @@ if ($q->fetch()) {
 }
 $pdo->prepare(
     "INSERT INTO feedback(complaint_id,student_id,rating,comment) VALUES(?,?,?,?)",
-)->execute([$id, $c["student_id"], $_POST["rating"], trim($_POST["comment"])]);
+)->execute([$id, $c["student_id"], $rating, trim($_POST["comment"])]);
 notify(
     $pdo,
     1,

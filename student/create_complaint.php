@@ -5,6 +5,9 @@ require_role("Student");
 $cats = $pdo
     ->query("SELECT * FROM complaint_categories WHERE is_active=1 ORDER BY category_name")
     ->fetchAll();
+$subcategories = $pdo
+    ->query("SELECT s.subcategory_id,s.category_id,s.subcategory_name FROM complaint_subcategories s JOIN complaint_categories c ON c.category_id=s.category_id WHERE s.is_active=1 AND c.is_active=1 ORDER BY s.subcategory_name")
+    ->fetchAll();
 $deps = $pdo
     ->query("SELECT * FROM departments WHERE is_active=1 ORDER BY department_name")
     ->fetchAll();
@@ -13,21 +16,27 @@ $err = "";
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     check_csrf();
     try {
-        $st = $pdo->prepare("SELECT student_id FROM students WHERE user_id=?");
+        $pdo->beginTransaction();
+        $st = $pdo->prepare(
+            "SELECT st.student_id,u.is_active FROM students st JOIN users u ON u.user_id=st.user_id WHERE st.user_id=? FOR UPDATE",
+        );
         $st->execute([$_SESSION["user_id"]]);
-        $sid = $st->fetchColumn();
-        if (!$sid) {
+        $student = $st->fetch();
+        if (!$student) {
             throw new Exception("Student profile not found.");
         }
+        if (!$student["is_active"]) {
+            throw new Exception("Your account is deactivated and cannot submit complaints.");
+        }
+        $sid = $student["student_id"];
 
-        $pdo->beginTransaction();
         $pdo->prepare(
             "INSERT INTO complaints(ticket_number,student_id,category_id,subcategory_id,department_id,title,description,priority,location) VALUES(?,?,?,?,?,?,?,?,?)",
         )->execute([
             "TEMP-" . $sid,
             $sid,
             $_POST["category_id"],
-            $_POST["subcategory_id"] ?: null,
+            ($_POST["subcategory_id"] ?? "") ?: null,
             $_POST["department_id"],
             trim($_POST["title"]),
             trim($_POST["description"]),
@@ -96,7 +105,7 @@ require "../includes/header.php";
             <div class="form-grid">
                 <div>
                     <label for="complaint-category">Category</label>
-                    <select id="complaint-category" name="category_id" required>
+                    <select id="complaint-category" name="category_id" data-category-select required>
                         <option value="">Select a category</option>
                         <?php foreach ($cats as $category): ?>
                             <option value="<?= $category["category_id"] ?>"><?= e($category["category_name"]) ?></option>
@@ -122,8 +131,13 @@ require "../includes/header.php";
                     </select>
                 </div>
                 <div>
-                    <label for="complaint-subcategory">Subcategory ID <span class="muted">(optional)</span></label>
-                    <input id="complaint-subcategory" type="number" name="subcategory_id" min="1" placeholder="Optional">
+                    <label for="complaint-subcategory">Subcategory <span class="muted">(optional)</span></label>
+                    <select id="complaint-subcategory" name="subcategory_id" data-subcategory-select>
+                        <option value="">Select a subcategory</option>
+                        <?php foreach ($subcategories as $subcategory): ?>
+                            <option value="<?= (int) $subcategory["subcategory_id"] ?>" data-category-id="<?= (int) $subcategory["category_id"] ?>"><?= e($subcategory["subcategory_name"]) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div>
                     <label for="complaint-location">Location <span class="muted">(optional)</span></label>

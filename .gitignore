@@ -1,0 +1,26 @@
+# Existing rules
+node_modules/
+.env
+
+# Git repository metadata
+.git/
+
+# System and OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Logs and temporary databases
+*.log
+logs/
+
+# Environment and configuration variations
+.env.local
+.env.development
+.env.production
+
+# Build outputs and cache directories
+dist/
+build/
+.cache/
